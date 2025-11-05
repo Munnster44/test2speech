@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Docs → OCR → Speech — text2speech v2.2-PWA</title>
+
+  <!-- PWA -->
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#1f7bd9">
+  <meta name="description" content="Single-file OCR→Speech app (PDF/DOCX/images) with offline PWA support.">
+  <link rel="icon" href="icons/icon-192.png" sizes="192x192">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+
+  <style>
+    :root{font-family:system-ui,-apple-system,Segoe UI,Roboto,'Helvetica Neue',Arial;margin:0}
+    body{padding:18px;max-width:980px;margin:18px auto;color:#0b2740}
+    h1{font-size:1.25rem;margin:0 0 10px}
+    .card{background:#fbfdff;border-radius:12px;padding:16px;box-shadow:0 6px 20px rgba(12,30,60,0.06)}
+    label{display:block;margin-top:12px}
+    input[type=file]{display:block;margin-top:6px}
+    #preview{max-width:100%;height:auto;border-radius:6px;margin-top:10px;border:1px solid #e6eef8}
+    .controls{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
+    button{padding:10px 14px;border-radius:8px;border:0;background:#1f7bd9;color:white;cursor:pointer}
+    button[disabled]{opacity:.6;cursor:not-allowed}
+    select,input[type=range]{padding:8px;border-radius:8px;border:1px solid #cfe3ff;background:white}
+    progress{width:100%;height:14px;margin-top:8px}
+    pre{white-space:pre-wrap;background:#f5f8fb;padding:12px;border-radius:8px;border:1px solid #e9f1fb;margin-top:12px;max-height:360px;overflow:auto}
+    .note{font-size:.9rem;color:#405b7a;margin-top:8px}
+    .small{font-size:.85rem;color:#516b82}
+    footer{font-size:.8rem;color:#526274;text-align:center;margin-top:20px;border-top:1px solid #d8e0ec;padding-top:8px}
+
+    .summaryWrap{margin-top:12px}
+    .summaryHdr{display:flex;justify-content:space-between;align-items:center;background:#eef6ff;padding:8px;border-radius:8px;border:1px solid #d8eafc}
+    .summaryBody{padding:10px;background:#fff;border-radius:6px;border:1px solid #eef6ff;margin-top:6px;display:none}
+
+    /* Slim header badge for version */
+    .badge{display:inline-block;margin-left:8px;font-size:.75rem;color:#0b2740;background:#e9f2ff;border:1px solid #cfe3ff;padding:2px 8px;border-radius:999px}
+  </style>
+</head>
+<body>
+  <div class="card" role="main">
+    <h1>
+      Document → OCR → Speech
+      <span class="badge">v2.2-PWA</span>
+    </h1>
+    <p class="note">Single-file app: accepts <strong>images</strong>, <strong>PDF</strong>, <strong>DOCX</strong>. Extracts text with direct parsing or OCR fallback. New in v2.2: page markers, voice selector, and a collapsible summary preview.</p>
+
+    <label for="file">Choose file(s): <input id="file" type="file" accept=".pdf,.docx,image/*" multiple></label>
+    <img id="preview" alt="preview" hidden>
+
+    <div class="controls" style="align-items:center">
+      <button id="processBtn">Process documents</button>
+      <button id="speakBtn" disabled>Read Aloud</button>
+      <button id="stopBtn" disabled>Stop</button>
+      <button id="downloadBtn" disabled>Download .txt</button>
+      <button id="aboutBtn">About</button>
+
+      <label style="display:flex;align-items:center;gap:8px">Voice<select id="voiceSelect"></select></label>
+      <label style="display:flex;align-items:center;gap:8px">Rate<input id="rate" type="range" min="0.5" max="2" step="0.1" value="1"></label>
+      <label style="display:flex;align-items:center;gap:8px">Pitch<input id="pitch" type="range" min="0.5" max="2" step="0.1" value="1"></label>
+      <label style="display:flex;align-items:center;gap:8px">Volume<input id="vol" type="range" min="0" max="1" step="0.1" value="1"></label>
+    </div>
+
+    <progress id="progress" value="0" max="1" hidden></progress>
+    <div class="small" id="status">Idle.</div>
+
+    <div class="summaryWrap">
+      <div class="summaryHdr"><strong>Summary Preview</strong><button id="toggleSummary">Show</button></div>
+      <div id="summaryBody" class="summaryBody"></div>
+    </div>
+
+    <pre id="result" aria-live="polite">No extracted text yet.</pre>
+
+    <p class="note">Keep online for the first OCR run (Tesseract language data will download). Files remain local in the browser. Works offline after first load.</p>
+  </div>
+
+  <footer>
+    &copy; 2025 Boater-Aid / Glen Carruthers. All rights reserved. — Version 2.2-PWA
+  </footer>
+
+  <!-- About Modal -->
+  <div id="aboutModal" style="position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);display:none;align-items:center;justify-content:center;">
+    <div id="aboutContent" style="background:white;border-radius:12px;padding:20px;max-width:520px;text-align:left;box-shadow:0 4px 20px rgba(0,0,0,0.2)">
+      <h2 style="margin-top:0;color:#1f7bd9">About this App</h2>
+      <p><strong>text2speech v2.2-PWA</strong></p>
+      <p>Extracts text from images, PDFs, and DOCX documents in your browser using <strong>Tesseract.js v5</strong>, <strong>pdf.js</strong>, and <strong>Mammoth.js</strong>. Reads text aloud with Web Speech API.</p>
+      <p>New in v2.2: page markers between PDF/OCR pages, a selectable voice dropdown, and a collapsible ~200-word summary preview.</p>
+      <p>No data leaves your device — everything runs locally. Support: g.carruthers@rogers.com</p>
+      <p style="margin-top:8px"><button id="closeAbout">Close</button></p>
+    </div>
+  </div>
+
+  <!-- Libraries (CDN) -->
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.3.0/dist/tesseract.min.js"></script>
+  <script src="https://unpkg.com/pdfjs-dist@2.16.105/build/pdf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mammoth@1.4.21/mammoth.browser.min.js"></script>
+
+  <script>
+    // --- PWA: register the service worker ---
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js')
+          .catch(err => console.warn('SW registration failed:', err));
+      });
+    }
+
+    // DOM refs
+    const fileInput = document.getElementById('file');
+    const preview = document.getElementById('preview');
+    const processBtn = document.getElementById('processBtn');
+    const speakBtn = document.getElementById('speakBtn');
+    const stopBtn = document.getElementById('stopBtn');
+    const downloadBtn = document.getElementById('downloadBtn');
+    const progressEl = document.getElementById('progress');
+    const statusEl = document.getElementById('status');
+    const resultEl = document.getElementById('result');
+    const rateInput = document.getElementById('rate');
+    const pitchInput = document.getElementById('pitch');
+    const volInput = document.getElementById('vol');
+    const voiceSelect = document.getElementById('voiceSelect');
+    const toggleSummaryBtn = document.getElementById('toggleSummary');
+    const summaryBody = document.getElementById('summaryBody');
+    const aboutBtn = document.getElementById('aboutBtn');
+    const aboutModal = document.getElementById('aboutModal');
+    const closeAbout = document.getElementById('closeAbout');
+
+    let extractedText = '';
+
+    // pdf.js worker
+    if (window.pdfjsLib && pdfjsLib.GlobalWorkerOptions) {
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://unpkg.com/pdfjs-dist@2.16.105/build/pdf.worker.min.js';
+    }
+
+    function setStatus(text, p = null) {
+      statusEl.textContent = text;
+      if (p === null) progressEl.hidden = true; else { progressEl.hidden = false; progressEl.value = p; }
+    }
+
+    // Voice selection
+    function populateVoices() {
+      const voices = window.speechSynthesis.getVoices();
+      voiceSelect.innerHTML = '';
+      voices.forEach(v => {
+        const opt = document.createElement('option');
+        opt.value = v.name + '|' + v.lang;
+        opt.textContent = `${v.name} (${v.lang})`;
+        voiceSelect.appendChild(opt);
+      });
+      const userLang = (navigator.language || 'en').split('-')[0];
+      const match = voices.find(v => v.lang && v.lang.startsWith(userLang));
+      if (match) {
+        for (const o of voiceSelect.options) if (o.textContent.includes(match.name)) { o.selected = true; break; }
+      }
+    }
+    if ('speechSynthesis' in window) { window.speechSynthesis.onvoiceschanged = populateVoices; populateVoices(); }
+
+    // Toggle summary
+    let summaryVisible = false;
+    toggleSummaryBtn.addEventListener('click', () => {
+      summaryVisible = !summaryVisible;
+      summaryBody.style.display = summaryVisible ? 'block' : 'none';
+      toggleSummaryBtn.textContent = summaryVisible ? 'Hide' : 'Show';
+    });
+
+    fileInput.addEventListener('change', () => {
+      const f = fileInput.files && fileInput.files[0];
+      if (f && f.type.startsWith('image/')) { preview.src = URL.createObjectURL(f); preview.hidden = false; }
+      else { preview.hidden = true; preview.removeAttribute('src'); }
+    });
+
+    processBtn.addEventListener('click', async () => {
+      const files = fileInput.files; if (!files || files.length === 0) { alert('Choose files first'); return; }
+      processBtn.disabled = true; speakBtn.disabled = true; downloadBtn.disabled = true; extractedText = ''; resultEl.textContent = 'Processing...'; summaryBody.textContent = ''; setStatus('Starting...', 0);
+
+      for (let i = 0; i < files.length; i++) {
+        const f = files[i]; setStatus(`Processing ${f.name} (${i+1}/${files.length})`, i / files.length * 0.08);
+        try {
+          const ext = (f.name.split('.').pop() || '').toLowerCase();
+          if (ext === 'pdf') {
+            const t = await handlePDF(f, p => setStatus(`PDF ${f.name}`, p));
+            extractedText += `\n\n--- Page markers will be inserted in the PDF flow ---\n\n` + (t || '[no text]');
+          } else if (ext === 'docx') {
+            const t = await handleDocx(f);
+            extractedText += `\n\n--- ${f.name} ---\n\n` + (t || '[no text]');
+          } else if (f.type.startsWith('image/')) {
+            const t = await handleImageOCR(f, p => setStatus(`OCR ${f.name}`, p));
+            extractedText += `\n\n--- ${f.name} ---\n\n` + (t || '[no text]');
+          } else {
+            try { const t = await handlePDF(f); extractedText += `\n\n--- ${f.name} ---\n\n` + (t||'[no text]'); }
+            catch (e) { const t = await handleImageOCR(f); extractedText += `\n\n--- ${f.name} ---\n\n` + (t||'[no text]'); }
+          }
+        } catch (err) { console.error(err); extractedText += `\n\n--- ${f.name} (error) ---\n\n` + String(err); }
+        setStatus(`Finished ${f.name}`, (i + 1) / files.length);
+      }
+
+      const words = extractedText.replace(/\s+/g, ' ').trim().split(' ');
+      const summary = words.slice(0, 200).join(' ');
+      summaryBody.textContent = summary ? summary + (words.length > 200 ? '...' : '') : '[No preview available]';
+      summaryBody.style.display = 'none'; toggleSummaryBtn.textContent = 'Show'; summaryVisible = false;
+
+      resultEl.textContent = extractedText.trim() || '[No text extracted]';
+      setStatus('All done.'); processBtn.disabled = false; speakBtn.disabled = !extractedText.trim(); downloadBtn.disabled = !extractedText.trim();
+    });
+
+    async function handleDocx(file) { setStatus('Reading DOCX...', 0); const arrayBuffer = await file.arrayBuffer(); const res = await mammoth.extractRawText({ arrayBuffer }); return res && res.value ? res.value.trim() : ''; }
+
+    async function handlePDF(file, progressCb) {
+      setStatus('Loading PDF...', 0);
+      const arrayBuffer = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      let fullText = '';
+      for (let p = 1; p <= pdf.numPages; ++p) {
+        const page = await pdf.getPage(p);
+        const textContent = await page.getTextContent();
+        const pageText = textContent.items.map(i => i.str).join(' ').trim();
+        if (pageText && pageText.length > 10) {
+          fullText += `\n\n--- Page ${p} ---\n` + pageText;
+          if (progressCb) progressCb(p / pdf.numPages);
+        } else {
+          if (progressCb) progressCb(0.2 + (p / pdf.numPages) * 0.6);
+          const viewport = page.getViewport({ scale: 2 });
+          const canvas = document.createElement('canvas');
+          canvas.width = Math.floor(viewport.width); canvas.height = Math.floor(viewport.height);
+          const ctx = canvas.getContext('2d');
+          await page.render({ canvasContext: ctx, viewport }).promise;
+          const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+          const ocrText = await handleImageOCR(blob, (pct) => { if (progressCb) progressCb(0.2 + (p / pdf.numPages) * 0.6 + pct * 0.1); });
+          fullText += `\n\n--- Page ${p} (OCR) ---\n` + (ocrText || '');
+          canvas.remove();
+        }
+      }
+      return fullText.trim();
+    }
+
+    async function handleImageOCR(blob, progressCb) {
+      setStatus('Running OCR...', 0);
+      const lang = 'eng';
+      const { data } = await Tesseract.recognize(blob, lang, {
+        logger: m => { if (m && m.progress != null) { progressCb && progressCb(m.progress); progressEl.hidden = false; progressEl.value = m.progress; } }
+      });
+      return data && data.text ? data.text.trim() : '';
+    }
+
+    // Speech
+    let currentUtter = null;
+    speakBtn.addEventListener('click', () => {
+      if (!('speechSynthesis' in window)) { alert('Web Speech API not supported'); return; }
+      const text = extractedText.trim(); if (!text) return;
+      window.speechSynthesis.cancel();
+      const utter = new SpeechSynthesisUtterance(text);
+      utter.rate = Number(rateInput.value); utter.pitch = Number(pitchInput.value); utter.volume = Number(volInput.value);
+      const vs = voiceSelect.value; if (vs) {
+        const [name, lang] = vs.split('|');
+        const v = window.speechSynthesis.getVoices().find(x => x.name === name && x.lang === lang);
+        if (v) utter.voice = v;
+      }
+      currentUtter = utter; window.speechSynthesis.speak(utter); speakBtn.disabled = true; stopBtn.disabled = false;
+      utter.onend = () => { stopBtn.disabled = true; speakBtn.disabled = false; };
+      utter.onerror = (e) => { console.error('Speech error', e); stopBtn.disabled = true; speakBtn.disabled = false; };
+    });
+
+    stopBtn.addEventListener('click', () => { window.speechSynthesis.cancel(); stopBtn.disabled = true; speakBtn.disabled = false; });
+
+    // Download
+    downloadBtn.addEventListener('click', () => {
+      const b = new Blob([extractedText], { type: 'text/plain' });
+      const u = URL.createObjectURL(b);
+      const a = document.createElement('a');
+      a.href = u; a.download = 'ocr-result.txt'; a.click();
+      URL.revokeObjectURL(u);
+    });
+
+    // About modal
+    aboutBtn.addEventListener('click', () => { aboutModal.style.display = 'flex'; });
+    closeAbout.addEventListener('click', () => { aboutModal.style.display = 'none'; });
+    aboutModal.addEventListener('click', (e) => { if (e.target === aboutModal) aboutModal.style.display = 'none'; });
+  </script>
+</body>
+</html>
